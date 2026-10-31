@@ -24,7 +24,10 @@ public sealed class MainForm : Form
     public MainForm(AppConfig config, string configPath, string databasePath)
     {
         _config = config; _configPath = configPath; _databasePath = databasePath; _store = new ConsolidationStore(databasePath);
-        Text = "Vending Manager"; Width = 1200; Height = 780; MinimumSize = new Size(950, 650);
+        Text = "Vending Manager"; StartPosition = FormStartPosition.CenterScreen;
+        var workArea = Screen.PrimaryScreen?.WorkingArea ?? new Rectangle(0, 0, 1200, 800);
+        Width = Math.Min(1200, workArea.Width - 24); Height = Math.Min(780, workArea.Height - 24);
+        MinimumSize = new Size(Math.Min(860, workArea.Width - 24), Math.Min(600, workArea.Height - 24));
         BackColor = Color.FromArgb(246, 248, 251); Font = new Font("Segoe UI", 10);
         BuildUi();
         LoadVendings();
@@ -35,18 +38,23 @@ public sealed class MainForm : Form
 
     private void BuildUi()
     {
-        var header = new Panel { Dock = DockStyle.Top, Height = 100, BackColor = Color.FromArgb(20, 42, 68), Padding = new Padding(28, 18, 24, 16) };
-        var title = new Label { Text = "Vending Manager", ForeColor = Color.White, Font = new Font("Segoe UI Semibold", 22), AutoSize = true, Location = new Point(24, 12) };
-        var subtitle = new Label { Text = "Seguimiento de créditos por vending", ForeColor = Color.FromArgb(190, 207, 224), AutoSize = true, Location = new Point(28, 58) };
-        header.Controls.Add(title); header.Controls.Add(subtitle);
+        var header = new Panel { Dock = DockStyle.Top, Height = 100, BackColor = Color.White, Padding = new Padding(20, 8, 24, 8) };
+        var title = new Label { Text = "Vending Manager", ForeColor = Color.FromArgb(20, 42, 68), Font = new Font("Segoe UI Semibold", 22), AutoSize = true, Location = new Point(120, 18) };
+        var subtitle = new Label { Text = "Seguimiento de créditos por vending", ForeColor = Color.FromArgb(91, 108, 126), AutoSize = true, Location = new Point(124, 60) };
+        var logo = new PictureBox { Size = new Size(82, 82), Location = new Point(20, 8), SizeMode = PictureBoxSizeMode.Zoom, BackColor = Color.White };
+        var logoPath = Path.Combine(AppContext.BaseDirectory, "Assets", "smart-vending.png");
+        if (File.Exists(logoPath)) { using var source = Image.FromFile(logoPath); logo.Image = new Bitmap(source); }
+        header.Controls.Add(logo); header.Controls.Add(title); header.Controls.Add(subtitle);
 
         var root = new Panel { Dock = DockStyle.Fill, Padding = new Padding(24, 18, 24, 20) };
-        var selection = new FlowLayoutPanel { Dock = DockStyle.Top, Height = 76, WrapContents = false, BackColor = Color.White, Padding = new Padding(12), Margin = new Padding(0) };
+        var selection = new FlowLayoutPanel { Dock = DockStyle.Top, Height = 112, WrapContents = true, AutoScroll = true, BackColor = Color.White, Padding = new Padding(10), Margin = new Padding(0) };
         selection.Controls.Add(Field("Vending", _vending)); selection.Controls.Add(Field("Desde", _from)); selection.Controls.Add(Field("Hasta", _to));
         var refresh = Button("Consultar", Color.FromArgb(26, 113, 219)); refresh.Click += async (_, _) => await RefreshReportAsync();
         var settings = Button("Configurar vending", Color.FromArgb(235, 240, 246)); settings.Click += (_, _) => Configure();
         var export = Button("Exportar CSV", Color.FromArgb(235, 240, 246)); export.Click += async (_, _) => await ExportCsvAsync();
-        selection.Controls.Add(refresh); selection.Controls.Add(export); selection.Controls.Add(settings);
+        var importClean = Button("Importar y limpiar día", Color.FromArgb(255, 242, 217)); importClean.Width = 168;
+        importClean.Click += async (_, _) => await ImportAndPruneSelectedDateAsync();
+        selection.Controls.Add(refresh); selection.Controls.Add(export); selection.Controls.Add(settings); selection.Controls.Add(importClean);
         _vending.SelectedIndexChanged += async (_, _) => await SelectVendingAsync();
 
         _location.Text = "Selecciona una vending para ver su ubicación y reporte.";
@@ -61,7 +69,7 @@ public sealed class MainForm : Form
         _grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "Error", HeaderText = "CON ERROR", Width = 140, DefaultCellStyle = new DataGridViewCellStyle { Format = "N2", ForeColor = Color.FromArgb(190, 54, 54) } });
         _grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "Pending", HeaderText = "PENDIENTES", Width = 130, DefaultCellStyle = new DataGridViewCellStyle { Format = "N2" } });
         _grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "Unknown", HeaderText = "SIN ESTADO", Width = 130, DefaultCellStyle = new DataGridViewCellStyle { Format = "N2" } });
-        var footer = new Label { Text = "Los archivos .log originales se conservan. Consolidado local: " + _databasePath, Dock = DockStyle.Bottom, Height = 28, ForeColor = Color.FromArgb(113, 126, 140), Padding = new Padding(2, 7, 0, 0), Font = new Font("Segoe UI", 8.5f) };
+        var footer = new Label { Text = "La depuración guarda respaldo local y elimina del .log las filas finales de la fecha elegida. Consolidado: " + _databasePath, Dock = DockStyle.Bottom, Height = 28, ForeColor = Color.FromArgb(113, 126, 140), Padding = new Padding(2, 7, 0, 0), Font = new Font("Segoe UI", 8.5f) };
 
         root.Controls.Add(_grid); root.Controls.Add(footer); root.Controls.Add(cards); root.Controls.Add(_location); root.Controls.Add(selection);
         Controls.Add(root); Controls.Add(header);
@@ -157,7 +165,7 @@ internal sealed class LoginForm : Form
     public string Password => _pass.Text;
     public LoginForm(string vending)
     {
-        Text = "Acceso a " + vending; Width = 350; Height = 215; FormBorderStyle = FormBorderStyle.FixedDialog; StartPosition = FormStartPosition.CenterParent; MaximizeBox = false; MinimizeBox = false;
+        Text = "Acceso a " + vending; Width = 360; Height = 270; FormBorderStyle = FormBorderStyle.FixedDialog; StartPosition = FormStartPosition.CenterParent; MaximizeBox = false; MinimizeBox = false;
         var layout = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, Padding = new Padding(22), WrapContents = false };
         layout.Controls.Add(new Label { Text = "Usuario", AutoSize = true }); layout.Controls.Add(_user);
         layout.Controls.Add(new Label { Text = "Contraseña", AutoSize = true }); layout.Controls.Add(_pass);
@@ -172,8 +180,10 @@ internal sealed class VendingSettingsForm : Form
     private readonly ListBox _items = new() { Dock = DockStyle.Fill };
     public VendingSettingsForm(AppConfig config)
     {
-        _config = config; Text = "Configurar archivos y accesos"; Width = 700; Height = 420; StartPosition = FormStartPosition.CenterParent;
-        var buttons = new FlowLayoutPanel { Dock = DockStyle.Bottom, Height = 52, FlowDirection = FlowDirection.RightToLeft, Padding = new Padding(8) };
+        _config = config; Text = "Configurar archivos y accesos"; StartPosition = FormStartPosition.CenterParent;
+        var area = Screen.PrimaryScreen?.WorkingArea ?? new Rectangle(0, 0, 1000, 700);
+        Width = Math.Min(700, area.Width - 36); Height = Math.Min(420, area.Height - 36);
+        var buttons = new FlowLayoutPanel { Dock = DockStyle.Bottom, Height = 78, FlowDirection = FlowDirection.RightToLeft, WrapContents = true, Padding = new Padding(8) };
         var add = new Button { Text = "Agregar vending", Width = 130 }; add.Click += (_, _) => Edit(null);
         var edit = new Button { Text = "Editar", Width = 90 }; edit.Click += (_, _) => { if (_items.SelectedItem is VendingConfig v) Edit(v); };
         var remove = new Button { Text = "Eliminar", Width = 90 }; remove.Click += (_, _) => { if (_items.SelectedItem is VendingConfig v && MessageBox.Show(this, $"¿Eliminar {v.Name} de la configuración? Los datos consolidados no se borran.", "Confirmar", MessageBoxButtons.YesNo) == DialogResult.Yes) { _config.Vendings.Remove(v); Reload(); }; };
@@ -205,7 +215,7 @@ internal sealed class EditVendingForm : Form
     public VendingConfig? Result { get; private set; }
     public EditVendingForm(VendingConfig? existing)
     {
-        _existing=existing; Text=existing is null ? "Nueva vending" : "Editar vending"; Width=500; Height=390; StartPosition=FormStartPosition.CenterParent; FormBorderStyle=FormBorderStyle.FixedDialog;
+        _existing=existing; Text=existing is null ? "Nueva vending" : "Editar vending"; Width=550; Height=410; StartPosition=FormStartPosition.CenterParent; FormBorderStyle=FormBorderStyle.FixedDialog;
         if (existing is not null) { _name.Text=existing.Name; _location.Text=existing.Location; _path.Text=existing.LogPath; _username.Text=existing.Username; }
         var panel=new TableLayoutPanel { Dock=DockStyle.Fill, Padding=new Padding(18), ColumnCount=2, RowCount=6 };
         panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute,120)); panel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,100));
