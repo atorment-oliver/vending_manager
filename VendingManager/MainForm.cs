@@ -39,8 +39,8 @@ public sealed class MainForm : Form
     private void BuildUi()
     {
         var header = new Panel { Dock = DockStyle.Top, Height = 100, BackColor = Color.White, Padding = new Padding(20, 8, 24, 8) };
-        var title = new Label { Text = "Vending Manager", ForeColor = Color.FromArgb(20, 42, 68), Font = new Font("Segoe UI Semibold", 22), AutoSize = true, Location = new Point(146, 18) };
-        var subtitle = new Label { Text = "Seguimiento de créditos por vending", ForeColor = Color.FromArgb(91, 108, 126), AutoSize = true, Location = new Point(150, 60) };
+        var title = new Label { Text = "Vending Manager", ForeColor = Color.FromArgb(20, 42, 68), Font = new Font("Segoe UI Semibold", 22), AutoSize = true, Location = new Point(146, 14) };
+        var subtitle = new Label { Text = "Seguimiento de créditos por vending", ForeColor = Color.FromArgb(91, 108, 126), AutoSize = true, Location = new Point(150, 64) };
         var logo = new PictureBox { Size = new Size(118, 72), Location = new Point(14, 14), SizeMode = PictureBoxSizeMode.Zoom, BackColor = Color.White };
         var logoPath = Path.Combine(AppContext.BaseDirectory, "Assets", "smart-vending.png");
         if (File.Exists(logoPath)) { using var source = Image.FromFile(logoPath); logo.Image = new Bitmap(source); }
@@ -206,13 +206,13 @@ internal sealed class VendingSettingsForm : Form
         _config = config; Text = "Configurar archivos y accesos"; StartPosition = FormStartPosition.CenterParent;
         var area = Screen.PrimaryScreen?.WorkingArea ?? new Rectangle(0, 0, 1000, 700);
         Width = Math.Min(700, area.Width - 36); Height = Math.Min(420, area.Height - 36);
-        var buttons = new FlowLayoutPanel { Dock = DockStyle.Bottom, Height = 78, FlowDirection = FlowDirection.RightToLeft, WrapContents = true, Padding = new Padding(8) };
-        var add = new Button { Text = "Agregar vending", Width = 130 }; add.Click += (_, _) => Edit(null);
-        var edit = new Button { Text = "Editar", Width = 90 }; edit.Click += (_, _) => { if (_items.SelectedItem is VendingConfig v) Edit(v); };
-        var remove = new Button { Text = "Eliminar", Width = 90 }; remove.Click += (_, _) => { if (_items.SelectedItem is VendingConfig v && MessageBox.Show(this, $"¿Eliminar {v.Name} de la configuración? Los datos consolidados no se borran.", "Confirmar", MessageBoxButtons.YesNo) == DialogResult.Yes) { _config.Vendings.Remove(v); Reload(); }; };
-        var done = new Button { Text = "Guardar y cerrar", Width = 130, DialogResult = DialogResult.OK };
+        var buttons = new FlowLayoutPanel { Dock = DockStyle.Bottom, Height = 64, FlowDirection = FlowDirection.RightToLeft, WrapContents = false, AutoScroll = true, Padding = new Padding(4) };
+        var add = new Button { Text = "Agregar vending", Width = 130, Height = 34, Margin = new Padding(4) }; add.Click += (_, _) => Edit(null);
+        var edit = new Button { Text = "Editar", Width = 90, Height = 34, Margin = new Padding(4) }; edit.Click += (_, _) => { if (_items.SelectedItem is VendingConfig v) Edit(v); };
+        var remove = new Button { Text = "Eliminar", Width = 90, Height = 34, Margin = new Padding(4) }; remove.Click += (_, _) => { if (_items.SelectedItem is VendingConfig v && MessageBox.Show(this, $"¿Eliminar {v.Name} de la configuración? Los datos consolidados no se borran.", "Confirmar", MessageBoxButtons.YesNo) == DialogResult.Yes) { _config.Vendings.Remove(v); Reload(); }; };
+        var done = new Button { Text = "Guardar y cerrar", Width = 130, Height = 34, Margin = new Padding(4), DialogResult = DialogResult.OK };
         buttons.Controls.Add(done); buttons.Controls.Add(remove); buttons.Controls.Add(edit); buttons.Controls.Add(add);
-        Controls.Add(_items); Controls.Add(buttons); Reload();
+        Controls.Add(_items); Controls.Add(buttons); buttons.BringToFront(); Reload();
     }
     private void Reload() { _items.DataSource = null; _items.DataSource = _config.Vendings.ToList(); _items.DisplayMember = nameof(VendingConfig.Name); }
     private void Edit(VendingConfig? item)
@@ -246,7 +246,8 @@ internal sealed class EditVendingForm : Form
         var browse=new Button { Text="Examinar…", Width=90 }; browse.Click += (_,_) => { using var d=new OpenFileDialog { Filter="Logs (*.log)|*.log|Todos (*.*)|*.*" }; if(d.ShowDialog(this)==DialogResult.OK) _path.Text=d.FileName; };
         var pathPanel=new FlowLayoutPanel { Dock=DockStyle.Fill, WrapContents=false }; pathPanel.Controls.Add(_path); pathPanel.Controls.Add(browse);
         AddRow(panel,2,"Archivo .log",pathPanel); AddRow(panel,3,"Usuario",_username); AddRow(panel,4,"Contraseña",_password);
-        var save=new Button { Text="Guardar", Width=100, DialogResult=DialogResult.OK }; save.Click += (_,_) => SaveResult();
+        panel.RowStyles.Add(new RowStyle(SizeType.Absolute,48));
+        var save=new Button { Text="Guardar", Width=100, Height=34, DialogResult=DialogResult.OK }; save.Click += (_,_) => SaveResult();
         panel.Controls.Add(save,1,5); Controls.Add(panel); AcceptButton=save;
         if (existing is not null) _password.PlaceholderText="Dejar vacío para conservar contraseña";
     }
