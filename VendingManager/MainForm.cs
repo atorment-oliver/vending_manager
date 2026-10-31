@@ -135,7 +135,7 @@ public sealed class MainForm : Form
         if (_active is null) { MessageBox.Show(this, "Primero ingresa a una vending."); return; }
         var date = DateOnly.FromDateTime(_from.Value.Date);
         var confirm = MessageBox.Show(this,
-            $"Se importarán todos los registros del .log a SQLite y luego se quitarán del archivo las filas procesadas del {date:dd/MM/yyyy}. Las transacciones PENDIENTE se conservarán. El cambio también se sincronizará por Google Drive. ¿Continuar?",
+            $"Se importarán todos los registros del .log a SQLite y luego se quitarán del archivo las filas procesadas del {date:dd/MM/yyyy}. Si ese día tiene alguna fila PENDIENTE, no se retirará ninguna fila de esa fecha. El cambio también se sincronizará por Google Drive. ¿Continuar?",
             "Importar y depurar fecha", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
         if (confirm != DialogResult.Yes) return;
         try
