@@ -25,6 +25,13 @@ public sealed class ConsolidationStore(string databasePath)
         var original = await ReadStableBytesAsync(vending.LogPath, cancellationToken);
         var snapshotLines = DecodeLines(original);
         var imported = await ImportLinesAsync(vending, snapshotLines, cancellationToken);
+        var pendingInSnapshot = snapshotLines.Count(line =>
+            TryParse(line, out var parsed) &&
+            DateOnly.FromDateTime(parsed.At.DateTime) == date &&
+            parsed.Status == "PENDIENTE");
+        if (pendingInSnapshot > 0)
+            return new PruneResult(imported, 0, pendingInSnapshot);
+
         var path = Path.GetFullPath(vending.LogPath);
 
         await using var locked = await OpenExclusiveAsync(path, cancellationToken);
