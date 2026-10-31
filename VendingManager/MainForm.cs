@@ -39,15 +39,15 @@ public sealed class MainForm : Form
     private void BuildUi()
     {
         var header = new Panel { Dock = DockStyle.Top, Height = 100, BackColor = Color.White, Padding = new Padding(20, 8, 24, 8) };
-        var title = new Label { Text = "Vending Manager", ForeColor = Color.FromArgb(20, 42, 68), Font = new Font("Segoe UI Semibold", 22), AutoSize = true, Location = new Point(120, 18) };
-        var subtitle = new Label { Text = "Seguimiento de créditos por vending", ForeColor = Color.FromArgb(91, 108, 126), AutoSize = true, Location = new Point(124, 60) };
-        var logo = new PictureBox { Size = new Size(82, 82), Location = new Point(20, 8), SizeMode = PictureBoxSizeMode.Zoom, BackColor = Color.White };
+        var title = new Label { Text = "Vending Manager", ForeColor = Color.FromArgb(20, 42, 68), Font = new Font("Segoe UI Semibold", 22), AutoSize = true, Location = new Point(146, 18) };
+        var subtitle = new Label { Text = "Seguimiento de créditos por vending", ForeColor = Color.FromArgb(91, 108, 126), AutoSize = true, Location = new Point(150, 60) };
+        var logo = new PictureBox { Size = new Size(118, 72), Location = new Point(14, 14), SizeMode = PictureBoxSizeMode.Zoom, BackColor = Color.White };
         var logoPath = Path.Combine(AppContext.BaseDirectory, "Assets", "smart-vending.png");
         if (File.Exists(logoPath)) { using var source = Image.FromFile(logoPath); logo.Image = new Bitmap(source); }
         header.Controls.Add(logo); header.Controls.Add(title); header.Controls.Add(subtitle);
 
         var root = new Panel { Dock = DockStyle.Fill, Padding = new Padding(24, 18, 24, 20) };
-        var selection = new FlowLayoutPanel { Dock = DockStyle.Top, Height = 112, WrapContents = true, AutoScroll = true, BackColor = Color.White, Padding = new Padding(10), Margin = new Padding(0) };
+        var selection = new FlowLayoutPanel { Dock = DockStyle.Top, Height = 148, WrapContents = true, AutoScroll = true, BackColor = Color.White, Padding = new Padding(10), Margin = new Padding(0) };
         selection.Controls.Add(Field("Vending", _vending)); selection.Controls.Add(Field("Desde", _from)); selection.Controls.Add(Field("Hasta", _to));
         var refresh = Button("Consultar", Color.FromArgb(26, 113, 219)); refresh.Click += async (_, _) => await RefreshReportAsync();
         var settings = Button("Configurar vending", Color.FromArgb(235, 240, 246)); settings.Click += (_, _) => Configure();
