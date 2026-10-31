@@ -10,7 +10,9 @@ Aplicación de escritorio Windows con C# y .NET 8 para consultar registros de va
 - Reportes por día y por rango: créditos registrados, exitosos, con error, pendientes y registros antiguos sin resultado.
 - Exportación del resumen del rango a CSV.
 - La importación es repetible: el ID de transacción actualiza la misma fila cuando pasa de PENDIENTE a OK o ERROR.
-- Los archivos originales se conservan. Esto evita que una eliminación en una carpeta de Google Drive sincronizada se replique a la PC de la vending y borre el registro de auditoría.
+- La acción **Importar y limpiar día** consolida primero todas las filas válidas del log en SQLite y luego retira del `.log` las filas procesadas de la fecha elegida. Las filas `PENDIENTE` quedan en el log.
+- Antes de depurar se guarda una copia íntegra del `.log` en `%LOCALAPPDATA%\\VendingManager\\LogBackups`. El archivo se vuelve a verificar antes de modificarlo para evitar perder datos si cambió durante la importación.
+- La eliminación se sincroniza mediante Google Drive y también se reflejará en el equipo que comparte ese archivo. Ejecuta la depuración después de confirmar que el archivo terminó de sincronizarse.
 
 ## Formato soportado
 
@@ -32,14 +34,14 @@ Requiere Windows 10/11 y Visual Studio 2022 con la carga de trabajo **Desarrollo
 2. Restaura NuGet y ejecuta con F5.
 3. Pulsa **Configurar vending** y agrega el nombre (por ejemplo, Vending1), ubicación, ruta al log, usuario y contraseña.
 4. Selecciona la vending e inicia sesión con sus credenciales.
-5. Elige una fecha o un rango y pulsa **Consultar**.
+5. Elige una fecha o un rango y pulsa **Consultar**. Para consolidar todo el log y limpiar únicamente un día, elige esa fecha en **Desde** y pulsa **Importar y limpiar día**.
 
 La configuración y la base consolidada se guardan en:
 
     %LOCALAPPDATA%\VendingManager\vending-config.json
     %LOCALAPPDATA%\VendingManager\consolidated.db
 
-La base se mantiene local para cada usuario de Windows.
+La base y los respaldos se mantienen locales para cada usuario de Windows.
 
 ## Publicar para instalar
 
