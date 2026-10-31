@@ -136,7 +136,7 @@ public sealed class ConsolidationStore(string databasePath)
     {
         using var memory = new MemoryStream(bytes);
         using var reader = new StreamReader(memory, Encoding.UTF8, detectEncodingFromByteOrderMarks: true);
-        return reader.ReadToEnd().Split(new[] { "\\r\\n", "\\n", "\\r" }, StringSplitOptions.RemoveEmptyEntries);
+        return reader.ReadToEnd().Split(new[] { "\r\n", "\n", "\r" }, StringSplitOptions.RemoveEmptyEntries);
     }
 
     private static async Task<byte[]> ReadStableBytesAsync(string path, CancellationToken ct)
@@ -172,7 +172,7 @@ public sealed class ConsolidationStore(string databasePath)
     private static string DetectNewline(byte[] bytes)
     {
         var text = Encoding.UTF8.GetString(bytes);
-        return text.Contains("\\r\\n", StringComparison.Ordinal) ? "\\r\\n" : "\\n";
+        return text.Contains("\r\n", StringComparison.Ordinal) ? "\r\n" : "\n";
     }
 
     private static int FindTransactionStart(string line)
