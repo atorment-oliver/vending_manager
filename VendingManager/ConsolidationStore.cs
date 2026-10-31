@@ -13,6 +13,80 @@ public sealed class ConsolidationStore(string databasePath)
     {
         if (!File.Exists(vending.LogPath)) return 0;
         var lines = await ReadStableLinesAsync(vending.LogPath, cancellationToken);
+        return await ImportLinesAsync(vending, lines, cancellationToken);
+    }
+
+    // Import every row first. Only after SQLite commits do we remove final rows from the selected
+    // date. A byte-for-byte comparison prevents deleting data changed by the API during import.
+    public async Task<PruneResult> ImportAndPruneDateAsync(
+        VendingConfig vending, DateOnly date, string backupDirectory, CancellationToken cancellationToken = default)
+    {
+        if (!File.Exists(vending.LogPath)) return new PruneResult(0, 0, 0);
+        var original = await ReadStableBytesAsync(vending.LogPath, cancellationToken);
+        var snapshotLines = DecodeLines(original);
+        var imported = await ImportLinesAsync(vending, snapshotLines, cancellationToken);
+        var path = Path.GetFullPath(vending.LogPath);
+
+        await using var locked = await OpenExclusiveAsync(path, cancellationToken);
+        var current = await ReadAllBytesAsync(locked, cancellationToken);
+        if (!CryptographicOperations.FixedTimeEquals(SHA256.HashData(original), SHA256.HashData(current)))
+            throw new IOException("El archivo .log cambió durante la importación. No se borró ninguna fila; vuelve a consultar cuando termine la sincronización.");
+
+        var remaining = new List<string>();
+        var removed = 0;
+        var pending = 0;
+        foreach (var line in DecodeLines(current))
+        {
+            if (!TryParse(line, out var record) || DateOnly.FromDateTime(record.At.DateTime) != date)
+            {
+                remaining.Add(line);
+                continue;
+            }
+            if (record.Status == "PENDIENTE")
+            {
+                pending++;
+                remaining.Add(line);
+                continue;
+            }
+
+            // An older release could have concatenated the new transaction to a preceding row.
+            // Preserve that prefix even when the transaction suffix is removed.
+            var start = FindTransactionStart(line);
+            if (start > 0) remaining.Add(line[..(start - 1)]);
+            removed++;
+        }
+
+        if (removed == 0) return new PruneResult(imported, 0, pending);
+        Directory.CreateDirectory(backupDirectory);
+        var safeName = string.Concat(vending.Name.Select(ch => Path.GetInvalidFileNameChars().Contains(ch) ? '_' : ch));
+        var backupPath = Path.Combine(backupDirectory, $"{safeName}_{date:yyyyMMdd}_{DateTime.Now:yyyyMMdd_HHmmss_fff}.log.bak");
+        await File.WriteAllBytesAsync(backupPath, current, cancellationToken);
+
+        var newline = DetectNewline(current);
+        var outputText = remaining.Count == 0 ? "" : string.Join(newline, remaining) + newline;
+        var output = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false).GetBytes(outputText);
+        try
+        {
+            locked.Position = 0;
+            locked.SetLength(0);
+            await locked.WriteAsync(output, cancellationToken);
+            await locked.FlushAsync(cancellationToken);
+            locked.Flush(flushToDisk: true);
+        }
+        catch
+        {
+            locked.Position = 0;
+            locked.SetLength(0);
+            await locked.WriteAsync(current, CancellationToken.None);
+            await locked.FlushAsync(CancellationToken.None);
+            locked.Flush(flushToDisk: true);
+            throw;
+        }
+        return new PruneResult(imported, removed, pending);
+    }
+
+    private async Task<int> ImportLinesAsync(VendingConfig vending, string[] lines, CancellationToken cancellationToken)
+    {
         await using var connection = new SqliteConnection(_connectionString);
         await connection.OpenAsync(cancellationToken);
         await using (var schema = connection.CreateCommand())
@@ -56,6 +130,62 @@ public sealed class ConsolidationStore(string databasePath)
         }
         await tx.CommitAsync(cancellationToken);
         return count;
+    }
+
+    private static string[] DecodeLines(byte[] bytes)
+    {
+        using var memory = new MemoryStream(bytes);
+        using var reader = new StreamReader(memory, Encoding.UTF8, detectEncodingFromByteOrderMarks: true);
+        return reader.ReadToEnd().Split(new[] { "\\r\\n", "\\n", "\\r" }, StringSplitOptions.RemoveEmptyEntries);
+    }
+
+    private static async Task<byte[]> ReadStableBytesAsync(string path, CancellationToken ct)
+    {
+        for (var attempt = 0; ; attempt++)
+        {
+            try
+            {
+                return await File.ReadAllBytesAsync(path, ct);
+            }
+            catch (IOException) when (attempt < 4) { await Task.Delay(300, ct); }
+        }
+    }
+
+    private static async Task<FileStream> OpenExclusiveAsync(string path, CancellationToken ct)
+    {
+        for (var attempt = 0; ; attempt++)
+        {
+            ct.ThrowIfCancellationRequested();
+            try { return new FileStream(path, FileMode.Open, FileAccess.ReadWrite, FileShare.None, 4096, FileOptions.Asynchronous | FileOptions.WriteThrough); }
+            catch (IOException) when (attempt < 8) { await Task.Delay(250, ct); }
+        }
+    }
+
+    private static async Task<byte[]> ReadAllBytesAsync(FileStream stream, CancellationToken ct)
+    {
+        stream.Position = 0;
+        using var memory = new MemoryStream();
+        await stream.CopyToAsync(memory, ct);
+        return memory.ToArray();
+    }
+
+    private static string DetectNewline(byte[] bytes)
+    {
+        var text = Encoding.UTF8.GetString(bytes);
+        return text.Contains("\\r\\n", StringComparison.Ordinal) ? "\\r\\n" : "\\n";
+    }
+
+    private static int FindTransactionStart(string line)
+    {
+        var fields = line.Split('|');
+        for (var i = 0; i + 7 < fields.Length; i++)
+        {
+            if (DateTimeOffset.TryParse(fields[i + 1], CultureInfo.InvariantCulture, DateTimeStyles.AssumeLocal, out _) &&
+                decimal.TryParse(fields[i + 4], NumberStyles.Number, CultureInfo.InvariantCulture, out _) &&
+                fields[i + 5].Trim().ToUpperInvariant() is "OK" or "ERROR" or "PENDIENTE")
+                return line.IndexOf(fields[i], StringComparison.Ordinal);
+        }
+        return 0;
     }
 
     private static async Task<string[]> ReadStableLinesAsync(string path, CancellationToken ct)
@@ -136,3 +266,6 @@ public sealed class ConsolidationStore(string databasePath)
         return false;
     }
 }
+
+
+public sealed record PruneResult(int ImportedRecords, int RemovedRows, int PendingRowsLeft);
