@@ -45,7 +45,7 @@ public sealed class MainForm : Form
         selection.Controls.Add(Field("Vending", _vending)); selection.Controls.Add(Field("Desde", _from)); selection.Controls.Add(Field("Hasta", _to));
         var refresh = Button("Consultar", Color.FromArgb(26, 113, 219)); refresh.Click += async (_, _) => await RefreshReportAsync();
         var settings = Button("Configurar vending", Color.FromArgb(235, 240, 246)); settings.Click += (_, _) => Configure();
-        var export = Button("Exportar CSV", Color.FromArgb(235, 240, 246)); export.Click += (_, _) => ExportCsv();
+        var export = Button("Exportar CSV", Color.FromArgb(235, 240, 246)); export.Click += async (_, _) => await ExportCsvAsync();
         selection.Controls.Add(refresh); selection.Controls.Add(export); selection.Controls.Add(settings);
         _vending.SelectedIndexChanged += async (_, _) => await SelectVendingAsync();
 
@@ -61,7 +61,6 @@ public sealed class MainForm : Form
         _grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "Error", HeaderText = "CON ERROR", Width = 140, DefaultCellStyle = new DataGridViewCellStyle { Format = "N2", ForeColor = Color.FromArgb(190, 54, 54) } });
         _grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "Pending", HeaderText = "PENDIENTES", Width = 130, DefaultCellStyle = new DataGridViewCellStyle { Format = "N2" } });
         _grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "Unknown", HeaderText = "SIN ESTADO", Width = 130, DefaultCellStyle = new DataGridViewCellStyle { Format = "N2" } });
-        _grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "Date", HeaderText = "DETALLE", AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill });
         var footer = new Label { Text = "Los archivos .log originales se conservan. Consolidado local: " + _databasePath, Dock = DockStyle.Bottom, Height = 28, ForeColor = Color.FromArgb(113, 126, 140), Padding = new Padding(2, 7, 0, 0), Font = new Font("Segoe UI", 8.5f) };
 
         root.Controls.Add(_grid); root.Controls.Add(footer); root.Controls.Add(cards); root.Controls.Add(_location); root.Controls.Add(selection);
@@ -133,15 +132,17 @@ public sealed class MainForm : Form
         }
     }
 
-    private void ExportCsv()
+    private async Task ExportCsvAsync()
     {
         if (_active is null) { MessageBox.Show(this, "Primero ingresa a una vending."); return; }
         using var dialog = new SaveFileDialog { Filter = "Archivo CSV (*.csv)|*.csv", FileName = $"{_active.Name}_{_from.Value:yyyyMMdd}_{_to.Value:yyyyMMdd}.csv" };
         if (dialog.ShowDialog(this) != DialogResult.OK) return;
-        var rows = (_grid.DataSource as System.Collections.IEnumerable)?.Cast<object>().ToList() ?? [];
-        var sb = new StringBuilder("Fecha,Registrados,Exitosos,Error,Pendientes,Sin estado\r\n");
-        foreach (dynamic row in rows)
-            sb.AppendLine($"{((DateTime)row.Date):yyyy-MM-dd},{row.Total},{row.Success},{row.Error},{row.Pending},{row.Unknown}");
+        var start = DateOnly.FromDateTime(_from.Value.Date);
+        var end = DateOnly.FromDateTime(_to.Value.Date);
+        var rows = await _store.QueryAsync(_active.Name, start, end);
+        var sb = new StringBuilder("Fecha,Registrados,Exitosos,Error,Pendientes,Sin estado\\r\\n");
+        foreach (var row in rows)
+            sb.AppendLine($"{row.Date:yyyy-MM-dd},{row.Total.ToString(System.Globalization.CultureInfo.InvariantCulture)},{row.Success.ToString(System.Globalization.CultureInfo.InvariantCulture)},{row.Error.ToString(System.Globalization.CultureInfo.InvariantCulture)},{row.Pending.ToString(System.Globalization.CultureInfo.InvariantCulture)},{row.Unknown.ToString(System.Globalization.CultureInfo.InvariantCulture)}");
         File.WriteAllText(dialog.FileName, sb.ToString(), new UTF8Encoding(true));
         MessageBox.Show(this, "Reporte CSV exportado.");
     }
