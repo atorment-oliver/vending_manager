@@ -93,17 +93,13 @@ public sealed class ConsolidationStore(string databasePath)
         await using var connection = new SqliteConnection(_connectionString);
         await connection.OpenAsync(ct);
         await using var command = connection.CreateCommand();
-        command.CommandText = """
-            SELECT Id,At,Bank,UserName,Amount,Status,Detail FROM Credits
-            WHERE Vending=$v AND At >= $start AND At < $end ORDER BY At DESC;
-            """;
+        command.CommandText = "SELECT Id,At,Bank,UserName,Amount,Status,Detail FROM Credits WHERE Vending=$v ORDER BY At DESC;";
         command.Parameters.AddWithValue("$v", vending);
-        command.Parameters.AddWithValue("$start", start.ToDateTime(TimeOnly.MinValue).ToString("O", CultureInfo.InvariantCulture));
-        command.Parameters.AddWithValue("$end", end.AddDays(1).ToDateTime(TimeOnly.MinValue).ToString("O", CultureInfo.InvariantCulture));
         await using var reader = await command.ExecuteReaderAsync(ct);
         while (await reader.ReadAsync(ct))
         {
             if (!DateTimeOffset.TryParse(reader.GetString(1), CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var at)) continue;
+            if (DateOnly.FromDateTime(at.DateTime) < start || DateOnly.FromDateTime(at.DateTime) > end) continue;
             decimal.TryParse(reader.GetString(4), NumberStyles.Number, CultureInfo.InvariantCulture, out var amount);
             result.Add(new CreditRecord(reader.GetString(0), at, reader.GetString(2), reader.GetString(3), amount,
                 reader.GetString(5), reader.GetString(6)));
