@@ -130,6 +130,29 @@ public sealed class MainForm : Form
         catch (Exception ex) { MessageBox.Show(this, "No se pudo leer o consolidar el archivo. Revisa que Google Drive haya terminado de sincronizarlo.\n\n" + ex.Message, "Error de lectura", MessageBoxButtons.OK, MessageBoxIcon.Error); }
     }
 
+    private async Task ImportAndPruneSelectedDateAsync()
+    {
+        if (_active is null) { MessageBox.Show(this, "Primero ingresa a una vending."); return; }
+        var date = DateOnly.FromDateTime(_from.Value.Date);
+        var confirm = MessageBox.Show(this,
+            $"Se importarán todos los registros del .log a SQLite y luego se quitarán del archivo las filas procesadas del {date:dd/MM/yyyy}. Las transacciones PENDIENTE se conservarán. El cambio también se sincronizará por Google Drive. ¿Continuar?",
+            "Importar y depurar fecha", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
+        if (confirm != DialogResult.Yes) return;
+        try
+        {
+            var backupDirectory = Path.Combine(Path.GetDirectoryName(_databasePath)!, "LogBackups");
+            var result = await _store.ImportAndPruneDateAsync(_active, date, backupDirectory);
+            await RefreshReportAsync();
+            MessageBox.Show(this,
+                $"Consolidación completada.\nRegistros importados/actualizados: {result.ImportedRecords}\nFilas retiradas del .log: {result.RemovedRows}\nPendientes conservados: {result.PendingRowsLeft}\n\nRespaldo local: {backupDirectory}",
+                "Proceso completado", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, "No se borró ninguna fila porque la importación o la verificación del archivo falló. Intenta de nuevo cuando termine la sincronización de Google Drive.\n\n" + ex.Message,
+                "No se pudo depurar el log", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+    }
     private void Configure()
     {
         using var form = new VendingSettingsForm(_config);
