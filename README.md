@@ -10,7 +10,7 @@ Aplicación de escritorio Windows con C# y .NET 8 para consultar registros de va
 - Reportes por día y por rango: créditos registrados, exitosos, con error, pendientes y registros antiguos sin resultado.
 - Exportación del resumen del rango a CSV.
 - La importación es repetible: el ID de transacción actualiza la misma fila cuando pasa de PENDIENTE a OK o ERROR.
-- La acción **Importar y limpiar día** consolida primero todas las filas válidas del log en SQLite y luego retira del `.log` las filas procesadas de la fecha elegida. Las filas `PENDIENTE` quedan en el log.
+- La acción **Importar y limpiar día** consolida primero todas las filas válidas del log en SQLite y luego retira del `.log` las filas procesadas de la fecha elegida. Si esa fecha contiene alguna fila `PENDIENTE`, no retira ninguna fila de ese día; vuelve a intentarlo cuando la API cierre esa transacción.
 - Antes de depurar se guarda una copia íntegra del `.log` en `%LOCALAPPDATA%\\VendingManager\\LogBackups`. El archivo se vuelve a verificar antes de modificarlo para evitar perder datos si cambió durante la importación.
 - La eliminación se sincroniza mediante Google Drive y también se reflejará en el equipo que comparte ese archivo. Ejecuta la depuración después de confirmar que el archivo terminó de sincronizarse.
 
