@@ -76,7 +76,7 @@ public sealed class ConsolidationStore(string databasePath)
     public async Task<List<DailySummary>> QueryAsync(string vending, DateOnly start, DateOnly end, CancellationToken ct = default)
     {
         var all = await QueryRecordsAsync(vending, start, end, ct);
-        return all.GroupBy(x => DateOnly.FromDateTime(x.At.LocalDateTime))
+        return all.GroupBy(x => DateOnly.FromDateTime(x.At.DateTime))
             .OrderBy(x => x.Key)
             .Select(g => new DailySummary(g.Key,
                 g.Sum(x => x.Amount),
