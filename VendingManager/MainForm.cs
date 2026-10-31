@@ -137,10 +137,11 @@ public sealed class MainForm : Form
         if (_active is null) { MessageBox.Show(this, "Primero ingresa a una vending."); return; }
         using var dialog = new SaveFileDialog { Filter = "Archivo CSV (*.csv)|*.csv", FileName = $"{_active.Name}_{_from.Value:yyyyMMdd}_{_to.Value:yyyyMMdd}.csv" };
         if (dialog.ShowDialog(this) != DialogResult.OK) return;
+        await _store.SyncAsync(_active);
         var start = DateOnly.FromDateTime(_from.Value.Date);
         var end = DateOnly.FromDateTime(_to.Value.Date);
         var rows = await _store.QueryAsync(_active.Name, start, end);
-        var sb = new StringBuilder("Fecha,Registrados,Exitosos,Error,Pendientes,Sin estado\\r\\n");
+        var sb = new StringBuilder("Fecha,Registrados,Exitosos,Error,Pendientes,Sin estado\r\n");
         foreach (var row in rows)
             sb.AppendLine($"{row.Date:yyyy-MM-dd},{row.Total.ToString(System.Globalization.CultureInfo.InvariantCulture)},{row.Success.ToString(System.Globalization.CultureInfo.InvariantCulture)},{row.Error.ToString(System.Globalization.CultureInfo.InvariantCulture)},{row.Pending.ToString(System.Globalization.CultureInfo.InvariantCulture)},{row.Unknown.ToString(System.Globalization.CultureInfo.InvariantCulture)}");
         File.WriteAllText(dialog.FileName, sb.ToString(), new UTF8Encoding(true));
